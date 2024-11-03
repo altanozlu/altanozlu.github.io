@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-        <loc>http://altanozlu.github.io/</loc>
+        <loc>https://altanozlu.github.io/</loc>
     </url>
     <url>
-        <loc>http://altanozlu.github.io/notes/</loc>
+        <loc>https://altanozlu.github.io/notes/</loc>
     </url>
     <url>
-        <loc>http://altanozlu.github.io/notes/test/</loc>
+        <loc>https://altanozlu.github.io/notes/test/</loc>
         <lastmod>2024-10-03</lastmod>
     </url>
 </urlset>

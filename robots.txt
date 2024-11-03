@@ -1,4 +1,4 @@
 User-agent: *
 Disallow:
 Allow: /
-Sitemap: http://altanozlu.github.io/sitemap.xml
+Sitemap: https://altanozlu.github.io/sitemap.xml
