@@ -10,6 +10,7 @@ generate_feeds = true
 
 theme = "oceanic-zen"
 title = "Altan's blog"
+output_dir = "docs"
 
 [markdown]
 # Whether to do syntax highlighting
