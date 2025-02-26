@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        
+
+        <title>Altan&#x27;s blog</title>
+
+        
+            <link rel="stylesheet" href="https://altan.ozlu.eu/theme.css">
+        
+        
+    </head>
+    <body>
+        <div class="content">
+        
+        
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;altan.ozlu.eu" class="logo">Altan&#x27;s blog</a>
+                </div>
+                <div class="header-right">
+                    <nav itemscope itemtype="http://schema.org/SiteNavigationElement">
+                      <ul>
+                        
+                        
+                            
+                            <li class="nav">
+                                <a itemprop="url" href="https://altan.ozlu.eu/notes/">
+                                    <span itemprop="name">Notes</span>
+                                </a>
+                            </li>
+                        
+                        
+                        <li class="nav">
+                            <a itemprop="url" href="https://github.com/altanozlu">
+                                <img class="icon" src="https:&#x2F;&#x2F;altan.ozlu.eu/icons/github.svg" alt="Github">
+                            </a>
+                        </li>
+                        
+                        
+                      </ul>
+                    </nav>
+                </div>
+            </header>
+        
+        
+        <main>
+            
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div itemprop="headline">
+        <h1>Using RTC to run services with power savings!</h1>
+        <div class="border"></div>
+        <time datetime="2025-02-26" class="date" itemprop="datePublished">
+            26 Feb 2025
+        </time>
+    </div>
+    <div itemprop="articleBody">
+        <p>For some time, I've been using my desktop to run some applications, some of which are written by me and it's ideal to run it every 30 minutes or so.
+Since it's an AMD machine its idle power usage is not ideal.
+It's around <code>90W</code> without monitor, I couldn't get it lower with power saving settings in BIOS so I just gave up.
+A few days ago I wanted to know if it's possible to wake the machine programmatically and came across rtcwake.</p>
+<p>So I just wrote a small Rust script around it,</p>
+<p>When you call <code>suspend_until</code> it will just sleep, set RTC and continue until machine is suspended by external factors (like me!)
+if machine wakes up from suspend because of RTC, next time <code>suspend_until</code> called it will also suspend the machine after setting RTC.
+This cycle can be broken by external factor wake the machine before RTC.</p>
+<p>This way machine will only spend <code>1W</code> when it's suspended. It is also possible to set other modes for RTC, check <a href="https://www.man7.org/linux/man-pages/man8/rtcwake.8.html">man rtcwake</a>.</p>
+<p>How to use rtcwake (run this as root):</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let mut</span><span> rtc = rtcwake::RTCWake::new(Duration::from_minutes(</span><span style="color:#d08770;">30</span><span>));
+</span><span style="color:#b48ead;">loop </span><span>{
+</span><span>  println!(&quot;</span><span style="color:#a3be8c;">hey!</span><span>&quot;);
+</span><span>  rtc.</span><span style="color:#96b5b4;">suspend_until</span><span>()?;
+</span><span>}
+</span></code></pre>
+<p>rtcwake module:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use </span><span>std::{
+</span><span>    error::Error,
+</span><span>    process::Command,
+</span><span>    time::{Duration, SystemTime},
+</span><span>};
+</span><span>
+</span><span style="color:#b48ead;">const </span><span style="color:#d08770;">TICK_SECONDS</span><span>: Duration = Duration::from_secs(</span><span style="color:#d08770;">5</span><span>);
+</span><span>
+</span><span style="color:#b48ead;">enum </span><span>Status {
+</span><span>    Awake,
+</span><span>    Suspend,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">pub struct </span><span>RTCWake {
+</span><span>    </span><span style="color:#bf616a;">status</span><span>: Status,
+</span><span>    </span><span style="color:#bf616a;">duration</span><span>: Duration,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>RTCWake {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">new</span><span>(</span><span style="color:#bf616a;">duration</span><span>: Duration) -&gt; </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>        RTCWake {
+</span><span>            status: Status::Awake,
+</span><span>            duration,
+</span><span>        }
+</span><span>    }
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">suspend_until</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>) -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> desired_wake_time = SystemTime::now() + </span><span style="color:#bf616a;">self</span><span>.duration;
+</span><span>        </span><span style="color:#b48ead;">match </span><span style="color:#bf616a;">self</span><span>.status {
+</span><span>            Status::Awake =&gt; </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">sleep</span><span>(</span><span style="color:#bf616a;">self</span><span>.duration)?,
+</span><span>            Status::Suspend =&gt; {
+</span><span>                </span><span style="color:#96b5b4;">call_rtcwake</span><span>(&quot;</span><span style="color:#a3be8c;">mem</span><span>&quot;, </span><span style="color:#bf616a;">self</span><span>.duration)?;
+</span><span>                </span><span style="color:#b48ead;">let</span><span> now = SystemTime::now();
+</span><span>                </span><span style="color:#b48ead;">if</span><span> now &lt; desired_wake_time {
+</span><span>                    </span><span style="color:#65737e;">// System woke up before RTC
+</span><span>                    println!(&quot;</span><span style="color:#d08770;">{now:?}</span><span style="color:#a3be8c;"> &lt; </span><span style="color:#d08770;">{desired_wake_time:?}</span><span>&quot;);
+</span><span>                    </span><span style="color:#b48ead;">let</span><span> sleep_duration = desired_wake_time.</span><span style="color:#96b5b4;">duration_since</span><span>(now)?;
+</span><span>                    </span><span style="color:#bf616a;">self</span><span>.status = Status::Awake;
+</span><span>                    </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">sleep</span><span>(sleep_duration)?;
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>        Ok(())
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">sleep</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">duration</span><span>: Duration) -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> desired_wake_time = SystemTime::now() + duration;
+</span><span>        </span><span style="color:#96b5b4;">call_rtcwake</span><span>(&quot;</span><span style="color:#a3be8c;">no</span><span>&quot;, duration)?; </span><span style="color:#65737e;">// Now it won&#39;t suspend but just in case it will set up RTC.
+</span><span>        </span><span style="color:#b48ead;">loop </span><span>{
+</span><span>            </span><span style="color:#b48ead;">let</span><span> time_before_sleep = SystemTime::now();
+</span><span>            std::thread::sleep(</span><span style="color:#d08770;">TICK_SECONDS</span><span>);
+</span><span>            </span><span style="color:#b48ead;">let</span><span> passed_time = SystemTime::now().</span><span style="color:#96b5b4;">duration_since</span><span>(time_before_sleep)?;
+</span><span>            </span><span style="color:#b48ead;">if</span><span> passed_time &gt; </span><span style="color:#d08770;">TICK_SECONDS </span><span>* </span><span style="color:#d08770;">5 </span><span>{
+</span><span>                </span><span style="color:#65737e;">// Thread slept more than it should, assuming RTC wake
+</span><span>                </span><span style="color:#bf616a;">self</span><span>.status = Status::Suspend;
+</span><span>                println!(&quot;</span><span style="color:#a3be8c;">Woke with RTC</span><span>&quot;);
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">if </span><span>SystemTime::now() &gt;= desired_wake_time {
+</span><span>                </span><span style="color:#b48ead;">break</span><span>;
+</span><span>            }
+</span><span>        }
+</span><span>        Ok(())
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">call_rtcwake</span><span>(</span><span style="color:#bf616a;">mode</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>, </span><span style="color:#bf616a;">duration</span><span>: Duration) -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+</span><span>    Command::new(&quot;</span><span style="color:#a3be8c;">/usr/bin/rtcwake</span><span>&quot;)
+</span><span>        .</span><span style="color:#96b5b4;">arg</span><span>(&quot;</span><span style="color:#a3be8c;">-m</span><span>&quot;)
+</span><span>        .</span><span style="color:#96b5b4;">arg</span><span>(mode)
+</span><span>        .</span><span style="color:#96b5b4;">arg</span><span>(&quot;</span><span style="color:#a3be8c;">-s</span><span>&quot;)
+</span><span>        .</span><span style="color:#96b5b4;">arg</span><span>(duration.</span><span style="color:#96b5b4;">as_secs</span><span>().</span><span style="color:#96b5b4;">to_string</span><span>())
+</span><span>        .</span><span style="color:#96b5b4;">output</span><span>()?;
+</span><span>    Ok(())
+</span><span>}
+</span></code></pre>
+
+    </div>
+</article>
+
+        </main>
+        
+        <footer>
+            
+            <div class="border"></div>
+            <div class="footer">
+                <small class="footer-left">
+                    Copyright &copy; Altan Ozlu
+                </small>
+                <small class="footer-right">
+                    Powered by <a href="https://www.getzola.org">Zola</a> | Theme <a href="https://github.com/barlog-m/oceanic-zen">Oceanic Zen</a>
+                </small>
+            </div>
+        
+        </footer>
+    
+        </div>
+    </body>
+</html>
